@@ -93,7 +93,7 @@ f_data5 <- rbind(f_data4,data)
 a <- 0
 f_data6 <- data.frame(x = numeric(61), y = character(61),stringsAsFactors=FALSE)
  for ( i in levels(f_data5$date) ) {
-         newdata7 <- subset(f_data5,f_data5$date==i)
+         data7 <- subset(f_data5,f_data5$date==i)
           f_data6$x[a] <- (sum(data7$steps))
          f_data6$y[a] <- i
          a <- a + 1
@@ -107,3 +107,77 @@ median(f_data6$sum_of_steps_for_Each_day)
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+### Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day. ###
+
+```{r}
+f_data7 <- f_data5
+weekday <- vector()
+weekend <- vector()
+a <- 2
+j <- 1
+k <- 1
+for ( i in levels(f_data7$date) ) {
+         if(a %% 7 ==0) {
+                 weekend[j] <- i
+                  j <- j + 1
+                 } else if (a %% 7 == 1) {
+                         weekend[j] <- i
+                          j <- j + 1
+                          } else {
+                                   weekday[k] <- i
+                                    k <- k + 1
+                                    }
+         a <- a + 1
+         }
+
+
+f_data8 <- data.frame()
+for (i in weekday) {
+         data8 <- subset(f_data7,f_data$date==i)
+         if (nrow(data8) != 0) {
+                 data8$day <- "weekday"
+                 }
+          f_data8 <- rbind(f_data8,data8)
+          }
+
+
+f_data9 <- data.frame()
+for (i in weekend) {
+        data9 <- subset(f_data7,f_data7$date==i)
+        if (nrow(data9) != 0) {
+                data9$day <- "weekend"
+                }
+        f_data9 <- rbind(f_data9,data9)
+        }
+f_data10 <- rbind(f_data8,f_data9)
+
+
+ a <- 0
+ f_data11 <- data.frame(x = numeric(12960), y = numeric(12960))
+ for ( i in unique(f_data8$interval) ) {
+         data10 <- subset(f_data8,f_data8$interval==i)
+         f_data11$x[a] <- (sum(data10$steps))/nrow(data10)
+         f_data11$y[a] <- i
+         a <- a + 1
+         }
+colnames(f_data11) <- c("average_steps_for_each_interval", "interval")
+
+
+ a <- 0
+ f_data12 <- data.frame(x = numeric(4608), y = numeric(4608))
+for ( i in unique(f_data9$interval) ) {
+        data11 <- subset(f_data9,f_data9$interval==i)
+        f_data12$x[a] <- (sum(data11$steps))/nrow(data11)
+        f_data12$y[a] <- i
+        a <- a + 1
+        }
+colnames(f_data12) <- c("average_steps_for_each_interval", "interval")
+```
+
+### Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). The plot should look something like the following, which was creating using simulated data: ###
+
+```{r}
+par(mfrow=c(2,1))
+ plot(f_data12$interval,f_data12$average_steps_for_each_interval,main="Weekend",ylab="steps",xlab="interval")
+plot(f_data11$interval,f_data11$average_steps_for_each_interval,main="Weekday",ylab="steps",xlab="interval")
+```

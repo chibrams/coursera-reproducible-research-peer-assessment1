@@ -8,176 +8,184 @@ output:
 
 ## Loading and preprocessing the data
 
-```{r}
-setwd('/Users/public/Downloads')
-s_file <- read.csv('activity.csv')
-```
-
-```{r}
-s_file[!complete.cases(input_file),]
-data <- na.omit(s_file)
+```r
+#
+activity<-read.csv("activity.csv",colClasses=c("integer","Date","integer"))
+#q1
+Daily<-ddply(activity, c("date"),summarise,
+                   totalsteps=sum(steps,na.rm=TRUE)
+                   )
+#q2
+StepBy<-ddply(activity, c("interval"),summarise,
+                    meansteps = mean(steps,na.rm=TRUE)
+                    )
 ```
 
 ## What is mean total number of steps taken per day?
-```{r}
-a <- 0
-f_data1 <- data.frame(x = numeric(61), y = character(61),stringsAsFactors=FALSE)
-for ( i in levels(data$date) ) {
-        data1 <- subset(data,data$date==i)
-        f_data1$x[a] <- (sum(data1$steps))
-        f_data1$y[a] <- i
-        a <- a + 1
-         }
-colnames(f_data1) <- c("sum_of_steps_for_Each_day", "date")
-hist(f_data1$sum_of_steps_for_Each_day)
+
+```r
+StepByhist<-ggplot(StepBy,aes(x=totalsteps))+geom_histogram()+
+  xlab("Total number of steps")+
+  ggtitle("Total steps per day")+
+  theme_bw()
+print(StepByhist)
 ```
 
-```{r}
-
-mean(f_data1$sum_of_steps_for_Each_day)
-median(f_data1$sum_of_steps_for_Each_day)
-```
+![plot of chunk StepByhist](figure/StepByhist.png) 
 
 ## What is the average daily activity pattern?
-### Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis) ###
-
-```{r}
-a <- 0
-f_data2 <- data.frame(x = numeric(288), y = numeric(288))
-for ( i in unique(data$interval) ) {
-         data2 <- subset(data,data$interval==i)
-         f_data2$x[a] <- (sum(data2$steps))/nrow(data2)
-         f_data2$y[a] <- i
-         a <- a + 1
-         }
-colnames(f_data2) <- c("average_steps_for_each_interval", "interval")
-plot(f_data2$interval,f_data2$average_steps_for_each_interval)
+```r
+dayPtrn<-ggplot(StepBy,aes(x=interval,y=meansteps))+geom_line()+
+  ggtitle("Average steps by 5-min interval")+
+  ylab("Mean steps")+
+  theme_bw()
+print(dayPtrn)
 ```
 
-### Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps? ###
-
-```{r}
-max(f_data2$average_steps_for_each_interval)
-subset(f_data2,f_data2$average_steps_for_each_interval>206)
-```
-
+![plot of chunk dayPattern](figure/dayPtrn.png) 
 
 ## Imputing missing values
-### Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs) ###
 
-```{r}
-f_data3 <- s_file[!complete.cases(s_file),]
-nrow(f_data3)
+```r
+hist(which(complete.cases(activity)),
+     main="Count of complete cases (chronological order)",
+     xlab="Observation number",
+     ylab="Count of complete cases"
+     )
 ```
 
-### Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc ###
+![plot of chunk histincomplete](figure/histincomplete.png) 
+ 
+Interpolation is done by using the average of the previous valid observation and the next valid observation, or the average for the relevant 5-min interval if there is no valid previous/next observation. This produces smooth activity-over-the-day lines for each individual day, but is not very fast.
+ 
 
-```{r}
-f_data4 <- data.frame()
-for (i in f_data2$interval) {
-        data5 <- subset(f_data2,f_data2$interval==i)
-        data6 <- subset(f_data3,f_data3$interval==i)
-        data6$steps <- data5$average_steps_for_each_interval
-        f_data4 <- rbind(f_data4,newdata6)
-        }
+```r
+#q3
+step_interpolation <- function(rownumber){
+  prevrow=rownumber;
+  nextrow=rownumber;
+  while(is.na(activity$steps[prevrow])){
+    prevrow=prevrow-1
+    if(prevrow<1)return(mean(activity[activity$interval==activity$interval[rownumber],"steps"],na.rm=TRUE))
+  }
+  while(is.na(activity$steps[nextrow])){
+    nextrow=nextrow+1
+    if(nextrow>nrow(activity))return(mean(activity[activity$interval==activity$interval[rownumber],"steps"],na.rm=TRUE))
+  }
+  return(
+    (activity$steps[prevrow]+activity$steps[nextrow])/2
+  )
+}
+
+activity_guessNA <-activity
+for(n in 1:nrow(activity)){
+  if(is.na(activity$steps[n])){
+    activity_guessNA$steps[n]=step_interpolation(n);
+  }
+}
 ```
 
-### Create a new dataset that is equal to the original dataset but with the missing data filled in. ###
-```{r}
-f_data5 <- rbind(f_data4,data)
+I know, this is a density plot not a histogram, but the meaning is the same and I didn't want to superimpose two histograms. The imputed dataset has (relatively) fewer zeros, the original data is peppered with lone zeros and the imputation strategy above just doesn't reproduce this pattern. Most of the imputed entries appear to have been added in the most commonly occuring range.
+
+
+```r
+stepsperday2<-merge(
+  ddply(activity_guessNA, c("date"),summarise,
+        guesstotalsteps=sum(steps,na.rm=TRUE)
+  ),
+  stepsperday,
+  by="date"
+)
+
+guesscheck<-ggplot(stepsperday2,aes(x=totalsteps))+
+  geom_density()+
+  geom_density(aes(x=guesstotalsteps,color="Imputed"))+
+  ggtitle("Density plot comparing raw and NA-imputed activity datasets")+
+  xlab("total steps")+
+  theme_bw()
+print(guesscheck)
 ```
 
-### Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps? ###
+![plot of chunk guesscompare](figure/guesscompare.png) 
 
-```{r}
-a <- 0
-f_data6 <- data.frame(x = numeric(61), y = character(61),stringsAsFactors=FALSE)
- for ( i in levels(f_data5$date) ) {
-         data7 <- subset(f_data5,f_data5$date==i)
-          f_data6$x[a] <- (sum(data7$steps))
-         f_data6$y[a] <- i
-         a <- a + 1
-         }
-colnames(f_data6) <- c("sum_of_steps_for_Each_day", "date")
-hist(f_data6$sum_of_steps_for_Each_day)
-mean(f_data6$sum_of_steps_for_Each_day)
-median(f_data6$sum_of_steps_for_Each_day) 
+Here's the histogram for my fellow pedants:
+
+```r
+hist(which(complete.cases(activity)),
+     main="Count of complete cases (chronological order)",
+     xlab="Observation number",
+     ylab="Count of complete cases"
+     )
 ```
-### The mean and median values are higher when missing values are added.Here, I have taken the average step values over all days for each interval as the missing values ###
+
+![plot of chunk histincomplete](figure/histincomplete.png) 
+ 
+
+```r
+step_interp <- function(rownumber){
+  prevrow=rownumber;
+  nextrow=rownumber;
+  while(is.na(activity$steps[prevrow])){
+    prevrow=prevrow-1
+    if(prevrow<1)return(mean(activity[activity$interval==activity$interval[rownumber],"steps"],na.rm=TRUE))
+  }
+  while(is.na(activity$steps[nextrow])){
+    nextrow=nextrow+1
+    if(nextrow>nrow(activity))return(mean(activity[activity$interval==activity$interval[rownumber],"steps"],na.rm=TRUE))
+  }
+  return(
+    (activity$steps[prevrow]+activity$steps[nextrow])/2
+  )
+}
+
+activity_guessNA <-activity
+for(n in 1:nrow(activity)){
+  if(is.na(activity$steps[n])){
+    activity_guessNA$steps[n]=step_interp(n);
+  }
+}
+```
+
+
+```r
+Daily2<-merge(
+  ddply(activity_guessNA, c("date"),summarise,
+        guesstotalsteps=sum(steps,na.rm=TRUE)
+  ),
+  Daily,
+  by="date"
+)
+
+Gcheck<-ggplot(Daily2,aes(x=totalsteps))+
+  geom_density()+
+  geom_density(aes(x=guesstotalsteps,color="Imputed"))+
+  ggtitle("Comparison of raw and NA-inputed activity datasets")+
+  xlab("total steps")+
+  theme_bw()
+print(Gcheck)
+```
+
+![plot of chunk guesscompare](figure/guesscompare.png) 
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
-### Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day. ###
+```r
+BizDays= c("Monday","Tuesday","Wednesday","Thursday","Friday")
 
-```{r}
-f_data7 <- f_data5
-weekday <- vector()
-weekend <- vector()
-a <- 2
-j <- 1
-k <- 1
-for ( i in levels(f_data7$date) ) {
-         if(a %% 7 ==0) {
-                 weekend[j] <- i
-                  j <- j + 1
-                 } else if (a %% 7 == 1) {
-                         weekend[j] <- i
-                          j <- j + 1
-                          } else {
-                                   weekday[k] <- i
-                                    k <- k + 1
-                                    }
-         a <- a + 1
-         }
+activity_guessNA$weekday<-as.factor(ifelse(weekdays(activity_guessNA$date)%in%BizDays,"weekday","weekend"))
 
+stepsperinterval.weekdaysplit<-ddply(activity_guessNA, c("interval","weekday"),summarise,
+                    meansteps = mean(steps,na.rm=TRUE)
+)
 
-f_data8 <- data.frame()
-for (i in weekday) {
-         data8 <- subset(f_data7,f_data$date==i)
-         if (nrow(data8) != 0) {
-                 data8$day <- "weekday"
-                 }
-          f_data8 <- rbind(f_data8,data8)
-          }
-
-
-f_data9 <- data.frame()
-for (i in weekend) {
-        data9 <- subset(f_data7,f_data7$date==i)
-        if (nrow(data9) != 0) {
-                data9$day <- "weekend"
-                }
-        f_data9 <- rbind(f_data9,data9)
-        }
-f_data10 <- rbind(f_data8,f_data9)
-
-
- a <- 0
- f_data11 <- data.frame(x = numeric(12960), y = numeric(12960))
- for ( i in unique(f_data8$interval) ) {
-         data10 <- subset(f_data8,f_data8$interval==i)
-         f_data11$x[a] <- (sum(data10$steps))/nrow(data10)
-         f_data11$y[a] <- i
-         a <- a + 1
-         }
-colnames(f_data11) <- c("average_steps_for_each_interval", "interval")
-
-
- a <- 0
- f_data12 <- data.frame(x = numeric(4608), y = numeric(4608))
-for ( i in unique(f_data9$interval) ) {
-        data11 <- subset(f_data9,f_data9$interval==i)
-        f_data12$x[a] <- (sum(data11$steps))/nrow(data11)
-        f_data12$y[a] <- i
-        a <- a + 1
-        }
-colnames(f_data12) <- c("average_steps_for_each_interval", "interval")
+weekdayplot<-ggplot(stepsperinterval.weekdaysplit,aes(x=interval,y=meansteps))+
+  facet_wrap(~weekday,nrow=2,ncol=1)+
+  geom_line()+
+  theme_bw()+
+  ggtitle("Mean steps vy Interval on weekday & weekend")+
+  ylab("Mean steps")+
+  xlab("Interval number")
+print(weekdayplot)
 ```
 
-### Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). The plot should look something like the following, which was creating using simulated data: ###
-
-```{r}
-par(mfrow=c(2,1))
- plot(f_data12$interval,f_data12$average_steps_for_each_interval,main="Weekend",ylab="steps",xlab="interval")
-plot(f_data11$interval,f_data11$average_steps_for_each_interval,main="Weekday",ylab="steps",xlab="interval")
-```
+![plot of chunk weekends](figure/weekends.png) 
